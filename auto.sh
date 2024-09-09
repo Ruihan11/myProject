@@ -1,4 +1,4 @@
-echo >> Performing auto push to remote github repository
+echo ">> Performing auto push to remote github repository"
 sleep 2
 
 git add .
