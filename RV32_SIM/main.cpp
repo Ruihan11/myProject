@@ -60,17 +60,19 @@ enum instrName {
 
 
 struct IFStruct {
-    bitset<32>  PC;
-	bitset<32>  Instr;
+    bitset<32>  PC = 0;
+	bitset<32>  Instr = 0;
     bool        nop = false;  
 };
 
 struct IDStruct {
+	bitset<32>  PC = 0;
     bitset<32>  Instr = 0;
     bool        nop = false;  
 };
 
 struct EXStruct {
+	bitset<32>  PC = 0;
 	bitset<32>  Instr;
     bitset<32>  Read_data1;
     bitset<32>  Read_data2;
@@ -84,16 +86,19 @@ struct EXStruct {
     bitset<5>   rs2;
 	bitset<5>   rd;
     bitset<5>   Wrt_reg_addr;
-	instrName instruction;
+	instrName instruction = UNKNOWN;
     bool        is_I_type;
     bool        rd_mem;
     bool        wrt_mem; 
     bool        alu_op;     //1 for addu, lw, sw, 0 for subu 
     bool        wrt_enable;
     bool        nop = false;  
+	bool		branchFound = false;
+	bool		branchTaken = false;
 };
 
 struct MEMStruct {
+	bitset<32>  PC = 0;
     bitset<32> Instr = 0;
     bitset<32> ALUresult = 0;
     bitset<32> Store_data = 0;
@@ -109,6 +114,7 @@ struct MEMStruct {
 };
 
 struct WBStruct {
+	bitset<32>  PC = 0;
 	instrName instruction;
 	bitset<32>  Instr;
     bitset<32>  Wrt_data;
@@ -457,6 +463,7 @@ class Core {
 		bool memToSecond;
 		bool exToFirst;
 		bool exToSecond;
+		bool pipeline;
 	public:
 		RegisterFile myRF;
 		uint32_t cycle = 0;
@@ -584,6 +591,7 @@ class Core {
 
 			nextState.IF.PC = bitset<32>(state.IF.PC.to_ulong()+4);
 			state.ID.Instr = ext_imem.readInstr(state.IF.PC);
+			state.ID.PC = state.IF.PC;
 			nextState.IF.nop = false;
 
 			
@@ -666,7 +674,9 @@ class Core {
 				}
 			}
 
-			
+			state.EX.Read_data1 = myRF.readRF(state.EX.rs1);
+			state.EX.Read_data2 = myRF.readRF(state.EX.rs2);
+			state.EX.PC = state.ID.PC;
 		
 		}
 
@@ -691,8 +701,11 @@ class Core {
     int32_t immS;
     int32_t immJ;
     int32_t immB;
-    int32_t rs1Value = static_cast<int32_t>(myRF.readRF(state.EX.rs1).to_ulong());
-    int32_t rs2Value = static_cast<int32_t>(myRF.readRF(state.EX.rs2).to_ulong());
+
+
+
+    int32_t rs1Value = static_cast<int32_t>(state.EX.Read_data1.to_ulong());
+    int32_t rs2Value = static_cast<int32_t>(state.EX.Read_data2.to_ulong());
     int32_t result = 0;
 
     if (state.EX.immI[11] | state.EX.immB[11] | state.EX.immS[11] | state.EX.immJ[19]) {
@@ -786,13 +799,15 @@ class Core {
             }
             break;
         case BNE:
+			state.EX.branchFound = (rs1Value != rs2Value);
             if (rs1Value != rs2Value) {
-                result = state.IF.PC.to_ulong() + immB;
+                result = state.EX.PC.to_ulong() + immB;
                 if (developerMode) {
-                    printf("EX >> BNE Taken: PC + %d = %d\n", immB, result);
+                    printf("EX >> BNE Taken: PC %ld + %d = %d\n",state.EX.PC.to_ulong(), immB, result);
                 }
             } else {
-                result = nextState.IF.PC.to_ulong();
+
+                result = state.EX.PC.to_ulong()+4;
                 if (developerMode) {
                     printf("EX >> BNE Not Taken\n");
                 }
@@ -800,13 +815,14 @@ class Core {
             state.EX.imm = bitset<32>(static_cast<uint32_t>(immB));
             break;
         case BEQ:
+			state.EX.branchFound = (rs1Value == rs2Value);
             if (rs1Value == rs2Value) {
-                result = state.IF.PC.to_ulong() + immB;
+                result = state.EX.PC.to_ulong() + immB;
                 if (developerMode) {
                     printf("EX >> BEQ Taken: PC + %d = %d\n", immB, result);
                 }
             } else {
-                result = nextState.IF.PC.to_ulong();
+                result = state.EX.PC.to_ulong()+4;
                 if (developerMode) {
                     printf("EX >> BEQ Not Taken\n");
                 }
@@ -814,11 +830,13 @@ class Core {
             state.EX.imm = bitset<32>(static_cast<uint32_t>(immB));
             break;
         case JAL:
-            result = state.IF.PC.to_ulong() + immJ;
+			state.EX.branchFound = true;
+            result = state.EX.PC.to_ulong() + 4;
             state.WB.Wrt_data = bitset<32>(static_cast<uint32_t>(result));
             state.WB.Wrt_reg_addr = state.EX.rd;
+			result = state.EX.PC.to_ulong() + immJ;
             if (developerMode) {
-                printf("EX >> JAL: PC + %d = %d, Writing to rd = x%ld\n", immJ, result, state.EX.rd.to_ulong());
+                printf("EX >> JAL: PC + 4 = %ld, Writing to rd = x%ld, Jumping to %d\n", state.EX.PC.to_ulong()+4, state.EX.rd.to_ulong(),result);
             }
             break;
         default:
@@ -833,6 +851,7 @@ class Core {
     state.MEM.rd = state.EX.rd;
     state.MEM.rs2 = state.EX.rs2;
     state.MEM.rs1 = state.EX.rs1;
+	state.MEM.PC = state.EX.PC;
 }
 
 		virtual void MEMStage() {
@@ -848,9 +867,9 @@ class Core {
 			printf("ME >> ");
 			decodeInstruction(state.MEM.Instr);
 		}
-
+		
 		state.WB.Instr = state.MEM.Instr;
-
+		state.WB.PC = state.MEM.PC;
 		bitset<32> result;
 
 		switch (state.MEM.instruction) {
@@ -905,6 +924,12 @@ class Core {
 				nextState.IF.PC = state.MEM.ALUresult;
 				state.WB.nop = true;
 				break;
+			case JAL:
+				if (developerMode) {
+					printf("ME >> JAL: Jumping to address 0x%08lX\n", state.MEM.ALUresult.to_ulong());
+				}
+				nextState.IF.PC = state.MEM.ALUresult;
+				break;
 			default:
 				if (developerMode) {
 					printf("ME >> Unknown Instruction\n");
@@ -930,6 +955,8 @@ class Core {
 				printf("WB >> ");
 				decodeInstruction(state.WB.Instr);}
 
+			
+
 			switch (state.WB.instruction)
 			{
 			// wrt data to wrt reg
@@ -942,6 +969,7 @@ class Core {
 			case XORI:
 			case ORI:
 			case ANDI:
+			case JAL:
 			case LW:	
 				myRF.writeRF(state.WB.Wrt_reg_addr,state.WB.Wrt_data);
 				if (developerMode) {
@@ -950,14 +978,14 @@ class Core {
 				}
 				break;
 
-			case JAL:
-				myRF.writeRF(state.WB.Wrt_reg_addr,nextState.IF.PC);
-				if (developerMode) {
-					cout << "WB >> Writing JAL value 0x" << hex << nextState.IF.PC.to_ulong()
-						<< " to register x" << dec << state.WB.Wrt_reg_addr.to_ulong() << endl;
-				}
-				nextState.IF.PC = state.WB.Wrt_data;
-				break;
+			// case JAL:
+			// 	myRF.writeRF(state.WB.Wrt_reg_addr,nextState.IF.PC);
+			// 	if (developerMode) {
+			// 		cout << "WB >> Writing JAL value 0x" << hex << nextState.IF.PC.to_ulong()
+			// 			<< " to register x" << dec << state.WB.Wrt_reg_addr.to_ulong() << endl;
+			// 	}
+			// 	nextState.IF.PC = state.WB.Wrt_data;
+			// 	break;
 
 			default:
 				break;
@@ -983,7 +1011,7 @@ class SingleStageCore : public Core {
 			}
 
 			haltCheck();
-
+			
 			if (halted){
 				myRF.outputRF(cycle);
 				printState(nextState, cycle);
@@ -1046,7 +1074,7 @@ class SingleStageCore : public Core {
 
 		void haltCheck(){
 
-			if(ext_imem.readInstr(state.IF.PC) == bitset<32>(-1)) {
+			if(static_cast<int32_t>(ext_imem.readInstr(state.IF.PC).to_ulong()) == -1) {
 					if(halted_cycles >= 1) {
 						halted = true;
 					}else{
@@ -1068,44 +1096,59 @@ class SingleStageCore : public Core {
 class FiveStageCore : public Core{
 	public:
 		
-		FiveStageCore(string ioDir, InsMem &imem, DataMem &dmem, const SingleStageCore &ssCore)
-		: Core(ioDir + "/FS_", imem, dmem), opFilePath(ioDir + "/StateResult_FS.txt") {
-			ssInstructionCount = ssCore.instructionCount;
-		}
+		FiveStageCore(string ioDir, InsMem &imem, DataMem &dmem)
+		: Core(ioDir + "/FS_", imem, dmem), opFilePath(ioDir + "/StateResult_FS.txt") {}
 
 		void step() {
+			// pipeline = true;
 			if (debugMode){
 				printf("--------------- Cycle %d --------------- \n",cycle);
 			}
 
-			EXHaltCheck();
-
+			WBHaltCheck();
+			
 			if (halted) {
 				if(debugMode) printf("--------------- HALTED ---------------\n");
 				myRF.outputRF(cycle);
 				return;
 			}
-			// initialPipeline();
 
-			handleHazard();
+			initialPipeline();
+
+			handleDataHazard();
 
 			WBStage();		
-			MEMStage();			
-			EXStage();		
-			IDStage();	
-			IFStage();
+			MEMStage();		
+			EXStage();
+
+			if (!state.EX.nop && state.EX.instruction!=-1 && state.EX.instruction!=40)	instructionCount ++;
+			// printf("branch found >> %s\n", state.EX.branchFound ? "true" : "false");
+			if(state.EX.branchFound) {
+				handleBranchHazard();
+			}else{
+				
+				IDStage();
+				IFStage();			
+			}
+
+			
+
 
 			memToSecond = false;
 			memToFirst = false;
 			exToSecond = false;
 			exToFirst = false;;
-        
+
             myRF.outputRF(cycle); // dump RF
 			printState(nextState, cycle); //print states after executing cycle 0, cycle 1, cycle 2 ... 
 			cleanNop();
-			state.IF.PC = nextState.IF.PC; //The end of the cycle and updates the current state with the values calculated in this cycle
+
+			state.IF.PC = nextState.IF.PC;//The end of the cycle and updates the current state with the values calculated in this cycle
 			cycle++;
 
+			// printf("S.PC >> %ld\n", state.IF.PC.to_ulong());
+			// printf("N.PC >> %ld\n", nextState.IF.PC.to_ulong());
+			
 			
 		}
 
@@ -1166,13 +1209,42 @@ class FiveStageCore : public Core{
 		    printstate.close();
 		}
 
-		void handleHazard(){
+		void handleBranchHazard(){
+
+			if (debugMode) {printf("!! Branch Hazards\n");}
+			state.EX = EXStruct();
+			state.ID = IDStruct();
+			state.IF = IFStruct();
+			state.EX.nop = true;
+			state.ID.nop = true;
+			state.IF.nop = true;
+
+			nextState.IF.PC = state.MEM.ALUresult;
+
+			// state.IF.PC = bitset<32>(state.IF.PC.to_ulong() - 4);
+
+			// nextState.IF.PC = bitset<32>(nextState.IF.PC.to_ulong() - 4);
+
+			// if(state.WB.instruction == BEQ || state.WB.instruction == BNE){
+			// 	// state.IF.PC = nextState.IF.PC;
+			// 	printf("branchtaken\n");
+			// 	state.EX.branchFound = false;
+			// 	state.EX.branchTaken = true;
+			// }
+
+			// if(state.WB.instruction == JAL){
+			// 	// state.IF.PC = nextState.IF.PC;
+			// 	state.EX.branchFound = false;
+			// 	state.EX.branchTaken = true;
+			// }
+
+		}
+
+		void handleDataHazard(){
 			//data hazard 
 			switch (state.EX.instruction){
 				case SW:
 				case JAL:
-				case BNE:
-				case BEQ:
 				case HALT:
 					return;
 					break;
@@ -1192,7 +1264,7 @@ class FiveStageCore : public Core{
 				state.ID.nop = true;
 				state.IF.nop = true;
 				memToFirst = true;
-				return;
+				// return;
 			}
 
 			//mem to 2rd
@@ -1203,7 +1275,8 @@ class FiveStageCore : public Core{
 				if (debugMode) printf("!! MEM to 2st >> wb forwarding\n");
 
 				if (state.EX.rs1 == state.WB.Wrt_reg_addr) {
-					myRF.writeRF(state.EX.rs1, state.WB.Wrt_data);
+					state.EX.Read_data1 = state.WB.Wrt_data;
+					// myRF.writeRF(state.EX.rs1, state.WB.Wrt_data);
 					if (developerMode) {
 						printf("Forwarding WB data to EX stage >> ");
 						printf("EX.rs1 (x%ld) matched WB.Wrt_reg_addr (x%ld) >> ", 
@@ -1214,7 +1287,8 @@ class FiveStageCore : public Core{
 				}
 
 				if (state.EX.rs2 == state.WB.Wrt_reg_addr) {
-					myRF.writeRF(state.EX.rs2, state.WB.Wrt_data);
+					state.EX.Read_data2 = state.WB.Wrt_data;
+					// myRF.writeRF(state.EX.rs2, state.WB.Wrt_data);
 					if (developerMode) {
 						printf("Forwarding WB data to EX stage >> ");
 						printf("EX.rs2 (x%ld) matched WB.Wrt_reg_addr (x%ld) >> ", 
@@ -1233,7 +1307,8 @@ class FiveStageCore : public Core{
 				if (debugMode) {printf("!! EX to 1st >> \n");}
 
 				if (state.EX.rs1 == state.MEM.rd) {
-					myRF.writeRF(state.EX.rs1, state.MEM.ALUresult);
+					state.EX.Read_data1 = state.MEM.ALUresult;
+					// myRF.writeRF(state.EX.rs1, state.MEM.ALUresult);
 					if (developerMode) {
 						printf("Forwarding MEM ALUresult to EX stage >> ");
 						printf("EX.rs1 (x%ld) matched MEM (x%ld) >> ", 
@@ -1244,7 +1319,8 @@ class FiveStageCore : public Core{
 				}
 
 				if (state.EX.rs2 == state.MEM.rd) {
-					myRF.writeRF(state.EX.rs2, state.MEM.ALUresult);
+					state.EX.Read_data2 = state.MEM.ALUresult;
+					// myRF.writeRF(state.EX.rs2, state.MEM.ALUresult);
 					if (developerMode) {
 						printf("Forwarding MEM ALUresult to EX stage >> ");
 						printf("EX.rs2 (x%ld) matched MEM (x%ld) >> ", 
@@ -1263,7 +1339,8 @@ class FiveStageCore : public Core{
 				if (debugMode) {printf("!! EX to 2rd >> \n");}
 
 				if (state.EX.rs1 == state.WB.Wrt_reg_addr) {
-					myRF.writeRF(state.EX.rs1, state.WB.Wrt_data);
+					state.EX.Read_data2 = state.WB.Wrt_data;
+					// myRF.writeRF(state.EX.rs1, state.WB.Wrt_data);
 					if (developerMode) {
 						printf("Forwarding WB ALUresult to EX stage >> ");
 						printf("EX.rs1 (x%ld) matched WB (x%ld) >> ", 
@@ -1274,7 +1351,8 @@ class FiveStageCore : public Core{
 				}
 
 				if (state.EX.rs2 == state.WB.Wrt_reg_addr) {
-					myRF.writeRF(state.EX.rs2, state.WB.Wrt_data);
+					state.EX.Read_data2 = state.WB.Wrt_data;
+					// myRF.writeRF(state.EX.rs2, state.WB.Wrt_data);
 					if (developerMode) {
 						printf("Forwarding MWBEM ALUresult to EX stage >> ");
 						printf("EX.rs2 (x%ld) matched WB (x%ld) >> ", 
@@ -1290,17 +1368,10 @@ class FiveStageCore : public Core{
 
 		}
 	
-		void EXHaltCheck(){
-
-			if(state.MEM.Instr == -1) {
-				// cout<<"-----------ex halted---------"<<endl;
-				// 	if(halted_cycles >= 1) {
-						// cout<<"-----------flag halted---------"<<endl;
-						halted = true;
-					// }else{
-					// 	halted_cycles ++;
-					// }
-					
+		void WBHaltCheck(){
+			
+			if(state.WB.Instr == -1) {
+						halted = true;			
 				}
 		}
 	
@@ -1309,10 +1380,15 @@ class FiveStageCore : public Core{
 				state.WB.nop = true;
 				state.MEM.nop = true;
 				state.EX.nop = true;
+				state.ID.nop = true;
 			}else if (cycle == 1) {  
 				state.WB.nop = true;
 				state.MEM.nop = true;
+				state.EX.nop = true;
 			}else if (cycle == 2) {  
+				state.WB.nop = true;
+				state.MEM.nop = true;
+			}else if (cycle == 3) {  
 				state.WB.nop = true;
 			}
 		}
@@ -1322,13 +1398,13 @@ class FiveStageCore : public Core{
 			ofstream metricsFile(filePath, ios_base::app);
 
 			uint32_t cycleCount = ++ cycle ;
-			double cpi = static_cast<double>(cycleCount) / ssInstructionCount;
-			double ipc = static_cast<double>(ssInstructionCount) / cycleCount;
+			double cpi = static_cast<double>(cycleCount) / instructionCount;
+			double ipc = static_cast<double>(instructionCount) / cycleCount;
 
 			if (metricsFile.is_open()) {
 				metricsFile << "\nPerformance of Five-Stage:\n";
 				metricsFile << "#Cycles -> " << cycleCount << "\n";
-				metricsFile << "#Instructions -> " << ssInstructionCount << "\n";
+				metricsFile << "#Instructions -> " << -- instructionCount  << "\n";
 				metricsFile << "CPI -> " << setprecision(17) << cpi << "\n";
 				metricsFile << "IPC -> " << setprecision(16) << ipc << "\n";
 			} else {
@@ -1342,7 +1418,6 @@ class FiveStageCore : public Core{
 
 	private:
 		string opFilePath;
-		uint32_t ssInstructionCount;
 		int count;
 };
 
@@ -1350,20 +1425,20 @@ int main(int argc, char* argv[]) {
 	
 	string ioDir = "";
 
-    // if (argc == 1) {
-    //     cout << "Enter path containing the memory files: ";
-    //     cin >> ioDir;
-    // }
-    // else if (argc > 2) {
-    //     cout << "Invalid number of arguments. Machine stopped." << endl;
-    //     return -1;
-    // }
-    // else {
-    //     ioDir = argv[1];
-    //     cout << "IO Directory: " << ioDir << endl;
-    // }
+    if (argc == 1) {
+        cout << "Enter path containing the memory files: ";
+        cin >> ioDir;
+    }
+    else if (argc > 2) {
+        cout << "Invalid number of arguments. Machine stopped." << endl;
+        return -1;
+    }
+    else {
+        ioDir = argv[1];
+        cout << "IO Directory: " << ioDir << endl;
+    }
 
-    ioDir = "/home/ruihan11/myProject/RV32_SIM/input";
+    // ioDir = "/home/ruihan11/myProject/RV32_SIM/input";
 
 	
     InsMem imem = InsMem("Imem", ioDir);
@@ -1371,15 +1446,15 @@ int main(int argc, char* argv[]) {
     DataMem dmem_ss = DataMem("SS", ioDir);
 	SingleStageCore SSCore(ioDir, imem, dmem_ss);
 	DataMem dmem_fs = DataMem("FS", ioDir);
-	FiveStageCore FSCore(ioDir, imem, dmem_fs,SSCore);
+	FiveStageCore FSCore(ioDir, imem, dmem_fs);
 
     
 
 
-	// for(int i=0;i<40;i++){
-   	// 	FSCore.debugMode = true;
-	// 	// FSCore.developerMode = true;
-	// 	FSCore.step();
+	// for(int i=0;i<30;i++){
+   	// 	SSCore.debugMode = true;
+	// 	// SSCore.developerMode = true;
+	// 	SSCore.step();
 	// }
 
 
@@ -1389,28 +1464,16 @@ int main(int argc, char* argv[]) {
 			// FSCore.developerMode = true;
 			SSCore.step();
 		}
-		
 		if (!FSCore.halted){
-			FSCore.debugMode = true;
-			FSCore.developerMode = true;
+			// FSCore.debugMode = true;
+			// FSCore.developerMode = true;
 			FSCore.step();
 		}
-		
-
 		if (SSCore.halted && FSCore.halted)
 			break;
     }
 
-	// while (1) {
-	// 	if (!SSCore.halted)
-	// 		SSCore.step();
-		
-	// 	if (!FSCore.halted)
-	// 		FSCore.step();
 
-	// 	if (SSCore.halted && FSCore.halted)
-	// 		break;
-    // }
     
 
 
