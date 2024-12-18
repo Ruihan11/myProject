@@ -288,7 +288,8 @@ class ImageSlideshow:
 
 
 if __name__ == '__main__':
-    directory = '/mnt/d/Motrix-1.8.19-ia32-win/Downloads/comics/'
+
+    directory = 'path to zip'
 
     zip_files = find_zip_files(directory)
 

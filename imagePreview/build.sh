@@ -1,16 +1,5 @@
 #!/bin/bash
-
-# Check if Conda is initialized
-if ! command -v conda &> /dev/null; then
-    echo "Conda is not installed or not in PATH."
-    exit 1
-fi
-
-# Check if Conda is properly initialized
-if [ -z "$CONDA_EXE" ]; then
-    echo "Conda is not initialized. Run 'conda init' and restart your terminal."
-    exit 1
-fi
+source ~/.bashrc
 
 # Activate Conda environment
 source "$(conda info --base)/etc/profile.d/conda.sh"
