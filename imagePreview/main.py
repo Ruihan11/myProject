@@ -149,25 +149,36 @@ class ImageSlideshow:
         if not self.images:
             return
 
-        # Update page number
+        # 更新页面号
         total_pages = len(self.images)
         current_page = self.index + 1
         self.page_label.config(text=f"Page {current_page}/{total_pages}")
 
-        # Update image
+        # 更新图片
         img = self.images[self.index]
         img_width, img_height = img.size
-        max_width = int(self.screen_width * 0.9)
-        max_height = int(self.screen_height * 0.9)
 
+        if self.is_fullscreen:
+            # 全屏模式：背景黑色，隐藏页面号
+            self.page_label.pack_forget()
+            max_width = self.screen_width
+            max_height = self.screen_height
+        else:
+            # 普通模式：显示页面号，限制最大尺寸为窗口的90%
+            self.page_label.pack(side=tk.BOTTOM, pady=5)
+            max_width = int(self.screen_width * 0.9)
+            max_height = int(self.screen_height * 0.9)
+
+        # 缩放图片
         if img_width > max_width or img_height > max_height:
             scaling_factor = min(max_width / img_width, max_height / img_height)
             new_width = int(img_width * scaling_factor)
             new_height = int(img_height * scaling_factor)
             img = img.resize((new_width, new_height), Image.ANTIALIAS)
 
+        # 将图片转换为 Tkinter 支持的格式
         photo = ImageTk.PhotoImage(img)
-        self.label.config(image=photo)
+        self.label.config(image=photo, bg="black" if self.is_fullscreen else "white")
         self.label.image = photo
 
     def next_image(self, event=None):
@@ -269,10 +280,30 @@ class ImageSlideshow:
         self.is_fullscreen = not self.is_fullscreen
         self.root.attributes("-fullscreen", self.is_fullscreen)
 
+        if self.is_fullscreen:
+            # 隐藏标题和侧边栏，设置背景为黑色
+            self.zip_name_label.pack_forget()
+            self.sidebar.grid_remove()
+            self.main_frame.config(bg="black")
+        else:
+            # 恢复标题和侧边栏，设置背景为白色
+            self.zip_name_label.pack(side=tk.TOP, pady=5)
+            self.sidebar.grid()
+            self.main_frame.config(bg="white")
+
+        self.update_image()  # 更新图片以适应全屏模式
+
     def exit_fullscreen(self, event=None):
         """Exit fullscreen mode."""
         self.is_fullscreen = False
         self.root.attributes("-fullscreen", False)
+
+        # 恢复标题和侧边栏，设置背景为白色
+        self.zip_name_label.pack(side=tk.TOP, pady=5)
+        self.sidebar.grid()
+        self.main_frame.config(bg="white")
+
+        self.update_image()  # 更新图片以适应窗口模式
 
     def set_interval(self):
         """Set the slideshow interval based on user input."""
@@ -289,7 +320,7 @@ class ImageSlideshow:
 
 if __name__ == '__main__':
 
-    directory = 'path to zip'
+    directory = '/mnt/d/Motrix-1.8.19-ia32-win/Downloads/comics/'
 
     zip_files = find_zip_files(directory)
 
