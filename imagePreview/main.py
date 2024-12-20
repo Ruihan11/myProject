@@ -1,9 +1,11 @@
 import os
 import zipfile
+import random 
 from PIL import Image, ImageTk
 import tkinter as tk
 from tkinter import messagebox
 from io import BytesIO
+
 
 
 def find_zip_files(directory):
@@ -121,6 +123,13 @@ class ImageSlideshow:
         self.root.bind('<F11>', self.toggle_fullscreen)  # Bind F11 for fullscreen toggle
         self.root.bind('<Escape>', self.exit_fullscreen)  # Bind Escape to exit fullscreen
 
+
+        self.random_mode = tk.BooleanVar(value=False)  # 默认关闭随机模式
+        random_checkbox = tk.Checkbutton(
+            self.sidebar, text="Random Mode", variable=self.random_mode,
+            bg="lightgrey", font=("Arial", 12), anchor="w"
+        )
+        random_checkbox.pack(fill=tk.X, padx=10, pady=5)
         # Start auto-play
         self.start_slideshow()
 
@@ -317,9 +326,19 @@ class ImageSlideshow:
         except ValueError:
             messagebox.showerror("Error", "Please enter a valid positive integer.")
 
+    def next_zip(self, event=None):
+        """Load the next ZIP file or choose a random one based on Random Mode."""
+        self.cancel_slideshow()
+        if self.random_mode.get():  # 如果启用了随机模式
+            self.current_zip_index = random.randint(0, len(self.zip_files) - 1)
+        else:  # 否则按顺序选择下一个 ZIP
+            self.current_zip_index = (self.current_zip_index + 1) % len(self.zip_files)
+        self.load_zip(self.current_zip_index)
+        if not self.is_paused:
+            self.start_slideshow()
+
 
 if __name__ == '__main__':
-
     directory = '/mnt/d/Motrix-1.8.19-ia32-win/Downloads/comics/'
 
     zip_files = find_zip_files(directory)
@@ -329,6 +348,9 @@ if __name__ == '__main__':
         root.title("ZIP Image Viewer")
 
         slideshow = ImageSlideshow(root, zip_files, directory, interval=5)
+
+        # 绑定 Enter 键用于随机选择 ZIP
+        root.bind('<Return>', slideshow.next_zip)
 
         root.mainloop()
     else:
