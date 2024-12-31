@@ -9,8 +9,11 @@ from io import BytesIO
 
 
 def find_zip_files(directory):
-    """Find all .zip files in the specified directory, sorted by name."""
-    return sorted([os.path.join(directory, f) for f in os.listdir(directory) if f.lower().endswith('.zip')])
+    """Find all .zip files in the specified directory, sorted by title."""
+    return sorted(
+        [os.path.join(directory, f) for f in os.listdir(directory) if f.lower().endswith('.zip')],
+        key=lambda x: os.path.basename(x).lower()  # 根据文件名排序
+    )
 
 
 def extract_images_from_zip(zip_path):
@@ -134,11 +137,11 @@ class ImageSlideshow:
         self.start_slideshow()
 
     def update_file_listbox(self):
-        """Update the file list."""
-        self.file_listbox.delete(0, tk.END)
-        self.zip_files = find_zip_files(self.directory)
+        """Update the file list sorted by title."""
+        self.file_listbox.delete(0, tk.END)  # 清空列表
+        self.zip_files = find_zip_files(self.directory)  # 获取按标题排序的文件
         for zip_file in self.zip_files:
-            self.file_listbox.insert(tk.END, os.path.basename(zip_file))
+            self.file_listbox.insert(tk.END, os.path.basename(zip_file))  # 插入文件名
 
     def load_zip(self, index):
         """Load images from the specified ZIP file."""
@@ -168,15 +171,29 @@ class ImageSlideshow:
         img_width, img_height = img.size
 
         if self.is_fullscreen:
-            # 全屏模式：背景黑色，隐藏页面号
-            self.page_label.pack_forget()
+            # 全屏模式：黑底白字，页面号与 PAUSE 的距离对称
             max_width = self.screen_width
             max_height = self.screen_height
+
+            # 更新页面号显示样式和位置
+            self.page_label.config(bg="white", fg="black", font=("Arial", 24, "bold"))  # 字体黑色，背景白色
+            self.page_label.place(relx=0.5, rely=0.98, anchor="s")  # 页面号浮动到图片下方
+
+            # 调整 PAUSE 标签样式和位置
+            self.pause_label.config(bg="white", fg="black", font=("Arial", 24, "bold"))
+            self.pause_label.place(relx=0.5, y=10, anchor="n")  # 位于顶部中央
         else:
-            # 普通模式：显示页面号，限制最大尺寸为窗口的90%
-            self.page_label.pack(side=tk.BOTTOM, pady=5)
+            # 普通模式：白底黑字，页面号固定在底部
             max_width = int(self.screen_width * 0.9)
             max_height = int(self.screen_height * 0.9)
+
+            # 恢复页面号显示样式和位置
+            self.page_label.config(bg="white", fg="black", font=("Arial", 24, "bold"))  # 字体黑色，背景白色
+            self.page_label.place_forget()  # 取消浮动
+            self.page_label.pack(side=tk.BOTTOM, pady=5)  # 底部固定显示
+
+            # 恢复 PAUSE 标签样式和隐藏
+            self.pause_label.place_forget()
 
         # 缩放图片
         if img_width > max_width or img_height > max_height:

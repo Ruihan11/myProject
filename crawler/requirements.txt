@@ -1,0 +1,25 @@
+attrs==24.3.0
+beautifulsoup4 @ file:///home/conda/feedstock_root/build_artifacts/beautifulsoup4_1733230845337/work
+Brotli @ file:///croot/brotli-split_1714483155106/work
+certifi @ file:///home/conda/feedstock_root/build_artifacts/certifi_1734380492396/work/certifi
+charset-normalizer @ file:///croot/charset-normalizer_1721748349566/work
+colorama @ file:///home/conda/feedstock_root/build_artifacts/colorama_1733218098505/work
+exceptiongroup==1.2.2
+h11==0.14.0
+idna @ file:///croot/idna_1714398848350/work
+lxml @ file:///croot/lxml_1732561265860/work
+outcome==1.3.0.post0
+PyPDF2==3.0.1
+PySocks @ file:///tmp/build/80754af9/pysocks_1605305812635/work
+requests @ file:///croot/requests_1730999120400/work
+selenium==4.27.1
+sniffio==1.3.1
+sortedcontainers==2.4.0
+soupsieve @ file:///home/conda/feedstock_root/build_artifacts/soupsieve_1693929250441/work
+tqdm @ file:///home/conda/feedstock_root/build_artifacts/tqdm_1732497199771/work
+trio==0.28.0
+trio-websocket==0.11.1
+typing_extensions==4.12.2
+urllib3 @ file:///croot/urllib3_1727769808118/work
+websocket-client==1.8.0
+wsproto==1.2.0
