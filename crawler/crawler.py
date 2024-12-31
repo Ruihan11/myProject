@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 
 def download_file(url, save_dir):
-    """下载文件并保存到指定目录"""
+    """Download file and save it to the specified directory."""
     file_name = os.path.join(save_dir, url.split("/")[-1])
     response = requests.get(url, stream=True)
     
@@ -20,7 +20,7 @@ def download_file(url, save_dir):
 
 
 def crawl_and_download(base_url, save_dir):
-    """爬取网页中的 PDF 和 ZIP 链接并下载"""
+    """Scrape PDF and ZIP links from the webpage and download them."""
     os.makedirs(save_dir, exist_ok=True)
     response = requests.get(base_url)
     
@@ -34,7 +34,7 @@ def crawl_and_download(base_url, save_dir):
     for link in links:
         file_url = link["href"]
         if file_url.endswith((".pdf", ".zip")):
-            # 如果是相对链接，补全成完整 URL
+            # If it's a relative link, construct a full URL
             if not file_url.startswith("http"):
                 file_url = os.path.join(base_url, file_url)
             print(f"Found file: {file_url}")
@@ -42,9 +42,9 @@ def crawl_and_download(base_url, save_dir):
 
 
 if __name__ == "__main__":
-    # 示例网站
-    base_url = "some web"  # 替换为目标网站
-    save_dir = "./downloads"
+    # Example website
+    base_url = "https://example.com"  # website
+    save_dir = "./downloads"  # save directory
 
     print("Starting the web crawler...")
     crawl_and_download(base_url, save_dir)
